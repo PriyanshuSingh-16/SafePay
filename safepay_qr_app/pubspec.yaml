@@ -1,0 +1,38 @@
+# safepay_qr/safepay_qr_app/pubspec.yaml
+name: safepay_qr_app
+description: A new Flutter project for SafePay QR hackathon.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0' # Adjust based on your Flutter SDK version
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The mobile_scanner package is highly recommended for QR scanning.
+  # It leverages native MLKit for performance and reliability.
+  mobile_scanner: ^5.0.0 # Check for the latest stable version on pub.dev
+
+  # Dio is a powerful HTTP client for Dart, easy to use for API calls.
+  dio: ^5.0.0 # Check for the latest stable version on pub.dev
+
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section like this:
+  # assets:
+  #   - assets/images/
+  #   - assets/icons/
+  #   - assets/fonts/
+
+  # For information on the generic Dart part of this file, see the
+  # following page: https://dartlang.org/tools/pub/pubspec
