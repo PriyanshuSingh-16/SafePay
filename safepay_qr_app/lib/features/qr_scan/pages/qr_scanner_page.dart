@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart'; // Recommended package for QR scanning
 import 'package:safepay_qr_app/data/providers/api_service.dart';
+import 'dart:async'; // Import for StreamSubscription
+
 // import 'package:safepay_qr_app/data/models/qr_data.dart'; // Not directly used in UI, but good to have
 
 class QrScannerPage extends StatefulWidget {
@@ -17,15 +19,80 @@ class _QrScannerPageState extends State<QrScannerPage> {
   String? scannedData; // Stores the raw content of the scanned QR code
   String? classificationResult; // Stores the classification result from the backend
   bool _isProcessing = false; // Flag to prevent multiple scans/requests
+  StreamSubscription<BarcodeCapture>? _barcodeSubscription; // To manage the stream subscription
+
+  @override
+  void initState() {
+    super.initState();
+    print('Frontend Debug: initState called.');
+    // Initialize classification result for initial state
+    classificationResult = 'Initializing camera...';
+
+    // Start the camera controller and listen for errors or successful start
+    _startCameraController(); // Call this to attempt camera start
+
+    // Subscribe to the barcodes stream for detection in mobile_scanner 5.x.x
+    _barcodeSubscription = cameraController.barcodes.listen((capture) {
+      print('Frontend Debug: barcodes stream emitted! Capture: $capture');
+      // The logic previously in onDetect now goes here
+      if (_isProcessing) {
+        print('Frontend Debug: Already processing, ignoring new detection from stream.');
+        return;
+      }
+
+      final List<Barcode> barcodes = capture.barcodes;
+      if (barcodes.isNotEmpty) {
+        final String? code = barcodes.first.rawValue;
+        if (code != null && code.isNotEmpty && code != scannedData) {
+          print('Frontend Debug: New unique QR code detected from stream: $code');
+          setState(() {
+            _isProcessing = true; // Set processing flag
+            scannedData = code; // Update scanned data
+            classificationResult = 'Scanning...'; // Show a scanning message
+          });
+          // Pause the camera while processing to prevent rapid re-scanning
+          cameraController.stop();
+          _classifyQrCode(code); // Call backend for classification
+        } else if (code == scannedData) {
+          print('Frontend Debug: Same QR code scanned again via stream, ignoring duplicate.');
+        } else {
+          print('Frontend Debug: Barcode rawValue is null or empty after detection from stream, or already processed.');
+        }
+      } else {
+        print('Frontend Debug: No barcodes found in the current capture frame from stream.');
+      }
+    });
+  }
+
+  // Helper function to explicitly start the camera controller
+  Future<void> _startCameraController() async {
+    print('Frontend Debug: Attempting to start camera controller...');
+    try {
+      await cameraController.start();
+      print('Frontend Debug: Camera controller started successfully.');
+      setState(() {
+        classificationResult = 'Camera Ready! Point at a QR.';
+      });
+    } catch (e) {
+      print('Frontend Debug: Failed to start camera controller in _startCameraController: $e');
+      setState(() {
+        classificationResult = 'Camera Init Error: ${e.toString()}';
+      });
+      _showErrorDialog('Camera Initialization Failed', 'There was an issue starting the camera: ${e.toString()}. Please check app permissions.');
+    }
+  }
 
   @override
   void dispose() {
+    print('Frontend Debug: dispose called. Cancelling subscriptions and disposing controller.');
+    _barcodeSubscription?.cancel(); // Cancel the stream subscription
     cameraController.dispose(); // Dispose the camera controller to release resources
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    print('Frontend Debug: build method called.');
     return Scaffold(
       appBar: AppBar(
         title: const Text('SafePay QR Scanner'),
@@ -40,43 +107,42 @@ class _QrScannerPageState extends State<QrScannerPage> {
                 // MobileScanner widget for live camera feed and QR detection
                 MobileScanner(
                   controller: cameraController,
-                  // Configure the scanner to detect only QR codes
-                  scanWindow: Rect.fromCenter(
-                      center: MediaQuery.of(context).size.center(Offset.zero),
-                      width: 200,
-                      height: 200),
-                  onDetect: (capture) {
-                    // Check if already processing a QR code to avoid duplicate calls
-                    if (_isProcessing) return;
-
-                    final List<Barcode> barcodes = capture.barcodes;
-                    if (barcodes.isNotEmpty) {
-                      final String? code = barcodes.first.rawValue;
-                      if (code != null && code != scannedData) {
-                        setState(() {
-                          _isProcessing = true; // Set processing flag
-                          scannedData = code; // Update scanned data
-                          classificationResult =
-                              'Scanning...'; // Show a scanning message
-                        });
-                        // Pause the camera while processing to prevent rapid re-scanning
-                        cameraController.stop();
-                        _classifyQrCode(code); // Call backend for classification
-                      }
-                    }
-                  },
+                  // Make scanWindow larger to maximize detection area for testing
+                  scanWindow: Rect.fromLTWH(
+                      MediaQuery.of(context).size.width * 0.1, // Left
+                      MediaQuery.of(context).size.height * 0.1, // Top
+                      MediaQuery.of(context).size.width * 0.8, // Width (80% of screen width)
+                      MediaQuery.of(context).size.height * 0.4, // Height (40% of screen height)
+                  ),
                 ),
-                // Overlay for the scan window area
+                // Overlay for the scan window area (now larger)
                 Center(
                   child: Container(
-                    width: 200,
-                    height: 200,
+                    width: MediaQuery.of(context).size.width * 0.8, // Match scanWindow width
+                    height: MediaQuery.of(context).size.height * 0.4, // Match scanWindow height
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.red, width: 2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
+                // Add a processing indicator
+                if (_isProcessing)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black54,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(color: Colors.white),
+                            SizedBox(height: 10),
+                            Text('Processing QR...', style: TextStyle(color: Colors.white, fontSize: 18)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -88,26 +154,33 @@ class _QrScannerPageState extends State<QrScannerPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    scannedData == null
-                        ? 'Point your camera at a QR code'
-                        : 'Scanned: ${scannedData!}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: scannedData == null ? Colors.grey[600] : Colors.blue,
+                  Flexible( // Added Flexible to prevent overflow of this text
+                    child: Text(
+                      scannedData == null
+                          ? 'Point your camera at a QR code'
+                          : 'Scanned: ${scannedData!}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: scannedData == null ? Colors.grey[600] : Colors.blue,
+                      ),
+                      overflow: TextOverflow.ellipsis, // Add ellipsis for very long text
+                      maxLines: 2, // Limit lines to prevent excessive vertical growth
                     ),
                   ),
                   const SizedBox(height: 10),
-                  // Display classification result
-                  Text(
-                    classificationResult ?? '',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: _getColorForStatus(classificationResult),
+                  Flexible( // Added Flexible to prevent overflow of this text
+                    child: Text(
+                      classificationResult ?? '',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: _getColorForStatus(classificationResult),
+                      ),
+                      overflow: TextOverflow.ellipsis, // Add ellipsis for very long text
+                      maxLines: 2, // Limit lines
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -140,8 +213,8 @@ class _QrScannerPageState extends State<QrScannerPage> {
                           scannedData = null;
                           classificationResult = null;
                         });
-                        cameraController
-                            .start(); // Restart camera for a new scan
+                        cameraController.start(); // Restart camera for a new scan
+                        print('Frontend Debug: Camera restarted for new scan.');
                       },
                       icon: const Icon(Icons.refresh, color: Colors.blueAccent),
                       label: const Text(
@@ -174,6 +247,8 @@ class _QrScannerPageState extends State<QrScannerPage> {
       return Colors.orange;
     } else if (status == 'Malicious') {
       return Colors.red;
+    } else if (status != null && status.contains('Error')) {
+      return Colors.red; // Color for errors
     } else {
       return Colors.black; // Default for 'Scanning...' or null
     }
@@ -181,13 +256,17 @@ class _QrScannerPageState extends State<QrScannerPage> {
 
   // Function to classify the scanned QR code by calling the backend API
   Future<void> _classifyQrCode(String qrContent) async {
+    print('Frontend Debug: Attempting to classify QR code: $qrContent');
     try {
       final result =
           await ApiService().post('/api/scan', {'qrContent': qrContent});
+      print('Frontend Debug: Classification API response: $result');
       setState(() {
         classificationResult = result['status']; // e.g., 'Safe', 'Suspicious', 'Malicious'
       });
+      print('Frontend Debug: Classification result updated: $classificationResult');
     } catch (e) {
+      print('Frontend Debug: Error during classification API call: $e');
       setState(() {
         classificationResult = 'Error: ${e.toString()}';
       });
@@ -196,6 +275,7 @@ class _QrScannerPageState extends State<QrScannerPage> {
       setState(() {
         _isProcessing = false; // Reset processing flag
       });
+      print('Frontend Debug: Processing complete. isProcessing set to false.');
       // Optionally restart camera after a brief delay if not immediately re-scanning
       // Future.delayed(const Duration(seconds: 2), () => cameraController.start());
     }
@@ -254,6 +334,7 @@ class _QrScannerPageState extends State<QrScannerPage> {
 
   // Function to report the QR code to the backend
   Future<void> _reportQrCode(String qrContent, String reason) async {
+    print('Frontend Debug: Attempting to report QR code: $qrContent with reason: $reason');
     setState(() {
       _isProcessing = true; // Set processing flag for reporting
     });
@@ -262,11 +343,13 @@ class _QrScannerPageState extends State<QrScannerPage> {
       const String mockUserId = 'hackathon_user_flutter_123';
       await ApiService().post(
           '/api/report', {'qrContent': qrContent, 'reason': reason, 'userId': mockUserId});
+      print('Frontend Debug: Report API response successful.');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('QR reported successfully! Thank you for your contribution.')),
       );
     } catch (e) {
+      print('Frontend Debug: Error during report API call: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to report QR: ${e.toString()}')),
       );
@@ -275,6 +358,7 @@ class _QrScannerPageState extends State<QrScannerPage> {
       setState(() {
         _isProcessing = false; // Reset processing flag
       });
+      print('Frontend Debug: Reporting complete. isProcessing set to false.');
       // Optionally restart camera if needed after reporting
       cameraController.start();
     }
@@ -301,4 +385,3 @@ class _QrScannerPageState extends State<QrScannerPage> {
     );
   }
 }
-

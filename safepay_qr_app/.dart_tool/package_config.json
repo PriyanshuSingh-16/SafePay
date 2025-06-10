@@ -129,9 +129,9 @@
     },
     {
       "name": "mobile_scanner",
-      "rootUri": "file:///C:/Users/priya/AppData/Local/Pub/Cache/hosted/pub.dev/mobile_scanner-5.2.3",
+      "rootUri": "file:///C:/Users/priya/AppData/Local/Pub/Cache/hosted/pub.dev/mobile_scanner-5.0.0",
       "packageUri": "lib/",
-      "languageVersion": "3.4"
+      "languageVersion": "3.3"
     },
     {
       "name": "path",
@@ -207,9 +207,9 @@
     },
     {
       "name": "web",
-      "rootUri": "file:///C:/Users/priya/AppData/Local/Pub/Cache/hosted/pub.dev/web-1.1.1",
+      "rootUri": "file:///C:/Users/priya/AppData/Local/Pub/Cache/hosted/pub.dev/web-0.5.1",
       "packageUri": "lib/",
-      "languageVersion": "3.4"
+      "languageVersion": "3.3"
     },
     {
       "name": "safepay_qr_app",

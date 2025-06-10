@@ -8,7 +8,7 @@ class AppConstants {
   // For Android Emulator, use '[http://10.0.2.2:3000](http://10.0.2.2:3000)' to access localhost on your machine.
   // For iOS Simulator or Web, use 'http://localhost:3000'.
   // For a deployed backend, replace with the actual deployed URL (e.g., '[https://your-backend-app.herokuapp.com](https://your-backend-app.herokuapp.com)').
-  static const String API_BASE_URL = 'http://10.0.2.2:3000'; // Example for Android emulator
+  static const String API_BASE_URL = 'http://192.168.42.216:3000'; // Example for Android emulator
   // static const String API_BASE_URL = 'http://localhost:3000'; // Example for iOS simulator/Web
 
   // Add other constants here if needed, e.g.,
